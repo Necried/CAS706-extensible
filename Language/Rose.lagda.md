@@ -7,7 +7,9 @@ open import Relation.Binary.PropositionalEquality
   using (_≡_; refl; sym; trans; cong; cong₂; _≢_)
 open import Data.String using (String; _≟_)
 open import Relation.Nullary.Decidable using ( Dec; yes; no; False; toWitnessFalse)
-
+open import Data.Product using (_×_; proj₁; proj₂; ∃; ∃-syntax) renaming (_,_ to ⟨_,_⟩)
+open import Relation.Nullary.Negation using (¬_; contradiction)
+import SystemF as F
 ```
 
 The syntax of rows, predicates and types.
@@ -16,13 +18,19 @@ These three types are mutually recursive.
 Operators
 ```agda
 infix   4  _∋_⦂_
+infix   4  _∋_꞉_
+infix   4 _❙_⊢_⤳_⦂_
+infix   4 _⇒_⦂_
+
 infixl  5  _,_⦂_
+infix   5  ƛ_⇒_
 
 infixr  7  _⇒_
-
-infix   5  ƛ_⇒_
+infixr  7  _ᵐ⇒_
 infixl  7  _·_
+
 infix   9  `_
+infix   9  ᵐ_
 ```
 
 ```agda
@@ -57,13 +65,33 @@ Terms, with qualified types ,schemes and direction
 ```agda
 data ℚType : Set where
   `_ : Type → ℚType
-  _⇒_ : Predicate → ℚType
+  _⇒_ : Predicate → ℚType → ℚType
 
 data Scheme : Set where
   QType : ℚType → Scheme
-  `∀_•_ : Id → Scheme
+  `∀_•_ : Id → Scheme → Scheme
   -- Omitted row polymorphic variables, could be
   -- combined with the ∀ abouve
+
+-- If we need a monotype:
+pattern ᵐ x = QType (` x)
+
+data MonoType : Scheme → Set where
+  Mono-v : ∀ {t : Type} → MonoType (ᵐ t)
+  Mono⇒ : ∀ {τ v}
+    → MonoType (ᵐ τ)
+    → MonoType (ᵐ v)
+      --------------
+    → MonoType (ᵐ (τ ⇒ v))
+
+-- MonoType arrows
+_ᵐ⇒_
+  : (τ₁ : Scheme)
+  → (τ₂ : Scheme)
+  → {isMono₁ : MonoType τ₁}
+  → {isMono₂ : MonoType τ₂}
+  → Scheme
+ᵐ τ₁ ᵐ⇒ ᵐ τ₂ = ᵐ (τ₁ ⇒ τ₂)
 
 data Direction : Set where
   L : Direction
@@ -82,7 +110,8 @@ data Term : Set where
   _▿_ : Term → Term → Term
 ```
 
-Context for predicates and environment for types
+Context for predicates and Env for types
+(I don't like this naming convention but it follows the paper)
 ```agda
 data Context : Set where
   ∅ : Context
@@ -90,22 +119,95 @@ data Context : Set where
 
 data Env : Set where
   ∅ : Env
-  _,_⦂_ : Env → Id → Type → Env
+  _,_⦂_ : Env → Id → Scheme → Env
 ```
 
 ```agda
-data _∋_⦂_ : Env → Id → Type → Set where
+data _∋_⦂_ : Env → Id → Scheme → Set where
   Z : ∀ {Γ x A} → Γ , x ⦂ A ∋ x ⦂ A
   S : ∀ {Γ x y A B} → x ≢ y → Γ ∋ x ⦂ A
     → Γ , y ⦂ B ∋ x ⦂ A
+
+data _∋_꞉_ : Context → Id → Predicate → Set where
+  Z : ∀ {Γ x A} → Γ , x ⦂ A ∋ x ꞉ A
+  S : ∀ {Γ x y A B} → x ≢ y → Γ ∋ x ꞉ A
+    → Γ , y ⦂ B ∋ x ꞉ A
+
 ```
 
-F⊗⊕ type and terms
+Translating from Rose types to F⊗⊕
 ```agda
-data TermF⊗⊕ : Set where
+⟦_⟧ : Scheme → F.Type
+⟦_⟧ = {!!}
+
+⟪_⟫ : Predicate → F.Type
+⟪_⟫ = {!!}
+```
+
+Free variables in the context and environment:
+```agda
+_∉FV[_,_] : Id → Context → Env → Set
+y ∉FV[ P , Γ ] = ∀ {t ψ} → ¬ (Γ ∋ y ⦂ t) × ¬ (P ∋ y ꞉ ψ)
 ```
 
 Rose typing rules and translation to F⊗⊕
 ```agda
-data _❙_⊢_⤳_⦂_ : Context → Env → Term → TermF⊗⊕ → Type → Set where
+open F.Term
+
+data _⇒_⦂_ : Context → F.Term → Predicate → Set where
+
+
+data _❙_⊢_⤳_⦂_ : Context → Env → Term → F.Term → Scheme → Set where
+  var : ∀ {P Γ x σ}
+    → MonoType σ
+    → Γ ∋ x ⦂ σ
+      -------------
+    → P ❙ Γ ⊢ ` x ⤳ ` x ⦂ σ
+
+  `let : ∀ {P Γ M N E F σ τ x}
+    → MonoType τ
+    → P ❙ Γ ⊢ M ⤳ E ⦂ σ
+    → P ❙ Γ , x ⦂ σ ⊢ N ⤳ F ⦂ τ
+      ---------------------------
+    → P ❙ Γ ⊢ (`let x ⦂ σ ＝ M `in N) ⤳ (ƛ x ⦂ ⟦ σ ⟧ ⇒ F) · E ⦂ τ
+
+  →I : ∀ {P Γ M E τ v x}
+    → (mono-τ : MonoType τ)
+    → (mono-v : MonoType v)
+    → P ❙ Γ , x ⦂ τ ⊢ M ⤳ E ⦂ v
+      ---------------------------
+    → P ❙ Γ ⊢ ƛ x ⇒ M ⤳ (ƛ x ⦂ ⟦ τ ⟧ ⇒ E) ⦂ (τ ᵐ⇒ v) {mono-τ} {mono-v}
+
+  →E : ∀ {P Γ M N E F τ v}
+    → (mono-τ : MonoType τ)
+    → (mono-v : MonoType v)
+    → P ❙ Γ ⊢ M ⤳ F ⦂ (τ ᵐ⇒ v) {mono-τ} {mono-v}
+    → P ❙ Γ ⊢ N ⤳ E ⦂ τ
+      ----------------------
+    → P ❙ Γ ⊢ M · N ⤳ F · E ⦂ v
+
+  ⇒I : ∀ {P ψ Γ M E v ρ}
+    → P , v ⦂ ψ ❙ Γ ⊢ M ⤳ E ⦂ QType ρ
+      ---------------------------
+    → P ❙ Γ ⊢ M ⤳ ƛ v ⦂ ⟪ ψ ⟫ ⇒ E ⦂ QType (ψ ⇒ ρ)
+
+  ⇒E : ∀ {P Γ E F M N ψ ρ}
+    → P ❙ Γ ⊢ M ⤳ F ⦂ QType (ψ ⇒ ρ)
+    → P ⇒ E ⦂ ψ
+      --------------------------------
+    → P ❙ Γ ⊢ M · N ⤳ F · E ⦂ QType ρ
+
+  ∀I : ∀ {P Γ M E σ t}
+    → P ❙ Γ ⊢ M ⤳ E ⦂ σ
+    → t ∉FV[ P , Γ ]
+      ------------------------
+    → P ❙ Γ ⊢ M ⤳ Λ t ⇒ E ⦂ (`∀ t • σ)
+
+{-
+  ∀E : ∀ {P Γ M E t τ σ}
+    → P ❙ Γ ⊢ M ⤳ E ⦂ `∀ t • σ
+      ---------------------------
+    → P ❙ Γ ⊢ M ⤳ E ＠ ⟦ τ ⟧ ⦂ σ [ t ≔ τ ]
+-}
 ```
+
