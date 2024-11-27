@@ -24,10 +24,11 @@ infix   4 _⇒_⦂_
 
 infixl  5  _,_⦂_
 infix   5  ƛ_⇒_
-
+infix   5 _⨀_~_ 
+infixl  5 _⧀_
 infixr  7  _⇒_
 infixr  7  _ᵐ⇒_
-infixl  7  _·_
+infixl  7  _★_
 
 infix   9  `_
 infix   9  ᵐ_
@@ -51,8 +52,8 @@ data Predicate where
 data Type where
   `_ : Id → Type
   _⇒_ : Type → Type → Type
-  Π_ : Predicate → Type
-  Σ_ : Predicate → Type
+  Π_ : Row → Type
+  Σ_ : Row → Type
   _▹_ : Label → Type → Type
 
 data Row where
@@ -105,7 +106,7 @@ data Term : Set where
   _▹_ : Label → Term → Term
   _/_ : Term → Label → Term
   prj⟦_⟧_ : Direction → Term → Term
-  _⋆_ : Term → Term → Term
+  _★_ : Term → Term → Term
   inj⟦_⟧_ : Direction → Term → Term
   _▿_ : Term → Term → Term
 ```
@@ -150,13 +151,39 @@ _∉FV[_,_] : Id → Context → Env → Set
 y ∉FV[ P , Γ ] = ∀ {t ψ} → ¬ (Γ ∋ y ⦂ t) × ¬ (P ∋ y ꞉ ψ)
 ```
 
-Rose typing rules and translation to F⊗⊕
+Type substitutions into schemes
+```agda
+infix 9 _ᵗ[_≔_]
+_ᵗ[_≔_] : Scheme → Id → Type → Scheme
+ᵐ A ᵗ[ t ≔ τ ] = {!!}
+QType (ψ ⇒ ρ) ᵗ[ t ≔ τ ] = {!!}
+(`∀ t′ • σ) ᵗ[ t ≔ τ ] = {!!}
+```
+
+The augmented entailment judgment P ⇒ F ∶ ψ denotes that
+F is an F⊗⊕ term giving evidence for predicate ψ
 ```agda
 open F.Term
 
 data _⇒_⦂_ : Context → F.Term → Predicate → Set where
+```
 
+Extension of the equivalence relation ζ₁ ~ ζ₂ on rows
+to an equivalence ⊢ τ₁ ≈ τ₂ on types
+```agda
+data ⊢_≈_ : Type → Type → Set where
+```
 
+Relating predicates to evidence of the predicate:
+```agda
+Evidence : Predicate → F.Type
+Evidence (ζ₁ ⨀ ζ₂ ~ ζ₃) = ? -- ⟦ ᵐ (Π ζ₁) ⟧ → ⟦ ᵐ (Π ζ₂) ⟧ → ⟦ ᵐ (Π ζ₃) ⟧
+Evidence n = ?
+
+```
+
+Rose typing rules and translation to F⊗⊕
+```agda
 data _❙_⊢_⤳_⦂_ : Context → Env → Term → F.Term → Scheme → Set where
   var : ∀ {P Γ x σ}
     → MonoType σ
@@ -203,11 +230,36 @@ data _❙_⊢_⤳_⦂_ : Context → Env → Term → F.Term → Scheme → Set 
       ------------------------
     → P ❙ Γ ⊢ M ⤳ Λ t ⇒ E ⦂ (`∀ t • σ)
 
-{-
-  ∀E : ∀ {P Γ M E t τ σ}
+  ∀E : ∀ {P Γ M E t σ}{τ : Type}
     → P ❙ Γ ⊢ M ⤳ E ⦂ `∀ t • σ
       ---------------------------
-    → P ❙ Γ ⊢ M ⤳ E ＠ ⟦ τ ⟧ ⦂ σ [ t ≔ τ ]
--}
-```
+    → P ❙ Γ ⊢ M ⤳ E ＠ ⟦ ᵐ τ ⟧ ⦂ σ ᵗ[ t ≔ τ ]
 
+  ▹I : ∀ {P Γ M E ℓ τ}
+    → P ❙ Γ ⊢ M ⤳ E ⦂ ᵐ τ
+      -------------------------
+    → P ❙ Γ ⊢ ℓ ▹ M ⤳ E ⦂ ᵐ (ℓ ▹ τ)
+
+  ▹E : ∀ {P Γ M E ℓ τ}
+    → P ❙ Γ ⊢ M ⤳ E ⦂ ᵐ (ℓ ▹ τ)
+      -------------------------
+    → P ❙ Γ ⊢ M / ℓ ⤳ E ⦂ ᵐ τ
+
+  SIM : ∀ {P Γ M E τ v}
+    → P ❙ Γ ⊢ M ⤳ E ⦂ ᵐ τ
+    → ⊢ τ ≈ v
+      -------------------
+    → P ❙ Γ ⊢ M ⤳ E ⦂ ᵐ v
+
+{-
+  ΠI : ∀ {P Γ M₁ M₂ E₁ E₂ F ζ₁ ζ₂ ζ₃}
+    → P ❙ Γ ⊢ M₁ ⤳ E₁ ⦂ ᵐ (Π ζ₁)
+    → P ❙ Γ ⊢ M₂ ⤳ E₂ ⦂ ᵐ (Π ζ₂)
+    → P ⇒ F ⦂ ζ₁ ⨀ ζ₂ ~ ζ₃
+      -------------------------
+    → P ❙ Γ ⊢ M₁ ★ M₂ ⤳ Evidence (ζ₁ ⨀ ζ₂ ~ ζ₃) · E₁ · E₂ ⦂ ᵐ (Π ζ₃)
+-}
+
+-- ΠEd : 
+
+```
