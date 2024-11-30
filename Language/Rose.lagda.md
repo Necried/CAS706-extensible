@@ -1,6 +1,7 @@
 This defines the Rose language as given in Chapter 4 of the paper.
 
 ```agda
+{-# OPTIONS --allow-unsolved-metas #-}
 module Rose where
 
 open import Relation.Binary.PropositionalEquality
@@ -8,8 +9,13 @@ open import Relation.Binary.PropositionalEquality
 open import Data.String using (String; _≟_)
 open import Relation.Nullary.Decidable using ( Dec; yes; no; False; toWitnessFalse)
 open import Data.Product using (_×_; proj₁; proj₂; ∃; ∃-syntax) renaming (_,_ to ⟨_,_⟩)
+open import Data.Fin.Base using (Fin; zero; suc; toℕ; fromℕ)
 open import Relation.Nullary.Negation using (¬_; contradiction)
+open import Data.Nat.Base using (ℕ; zero; suc; pred; _+_; _∸_)
+open import Data.Vec using (Vec; []; _∷_; _++_; map; lookup; length)
+open import Function.Base using (_∘_)
 import SystemF as F
+open F using (π[_⦂_]_; ι[_⦂_]_; π[i⦂_]_⟨_≤i≤_⟩; case_ι[i⦂_]⟨_≤i≤_,_⟩; [_⋯_])
 ```
 
 The syntax of rows, predicates and types.
@@ -43,22 +49,22 @@ Label = String
 
 data Predicate : Set
 data Type : Set
-data Row : Set
+Row : ℕ → Set
 
+-- Forcing the third row to have its length the sum of the first two rows
 data Predicate where
-  _⧀_ : Row → Row → Predicate
-  _⨀_~_ : Row → Row → Row → Predicate
+  _⧀_ : ∀ {i j} → Row i → Row j → Predicate
+  _⨀_~_ : ∀ {i j} → Row i → Row j → Row (i + j) → Predicate
 
 data Type where
+  Nat : Type
   `_ : Id → Type
   _⇒_ : Type → Type → Type
-  Π_ : Row → Type
-  Σ_ : Row → Type
+  Π_ : ∀ {n} → Row n → Type
+  Σ_ : ∀ {n} → Row n → Type
   _▹_ : Label → Type → Type
 
-data Row where
-  _▹_,_ : Label → Type → Row
-  ∎ᵣ : Row
+Row n = Vec Type n
 ```
 
 
@@ -99,6 +105,7 @@ data Direction : Set where
   R : Direction
 
 data Term : Set where
+  con    : ℕ → Term
   `_     : Id → Term
   ƛ_⇒_   : Id → Term → Term
   _·_    : Term → Term → Term
@@ -136,13 +143,51 @@ data _∋_꞉_ : Context → Id → Predicate → Set where
 
 ```
 
+In the trivial type theory, row combination is treated as concatenation:
+```agda
+_⌢_ : ∀ {i j} → Row i → Row j → Row (i + j)
+_⌢_ = _++_
+```
+
 Translating from Rose types to F⊗⊕
 ```agda
-⟦_⟧ : Scheme → F.Type
-⟦_⟧ = {!!}
+open F.Type
 
+{-# TERMINATING #-}
+⟦_⟧ : Scheme → F.Type
 ⟪_⟫ : Predicate → F.Type
+
+⟦ ᵐ Nat ⟧ = Nat
+⟦ ᵐ (` x) ⟧ = ` x
+⟦ ᵐ (A ⇒ B) ⟧ = ⟦ ᵐ A ⟧ ⇒ ⟦ ᵐ B ⟧
+⟦ ᵐ (Π ζ) ⟧ = ⊗[ length ζ ]⟨ map (⟦_⟧ ∘ ᵐ) ζ ⟩
+⟦ ᵐ (Σ ζ) ⟧ = ⊕[ length ζ ]⟨ map (⟦_⟧ ∘ ᵐ) ζ ⟩
+⟦ ᵐ (ℓ ▹ τ) ⟧ = ⟦ ᵐ τ ⟧
+⟦ QType (ψ ⇒ ρ) ⟧ = ⟪ ψ ⟫ ⇒ ⟦ QType ρ ⟧
+⟦ `∀ x • s ⟧ = `∀ x • ⟦ s ⟧
+
 ⟪_⟫ = {!!}
+
+≺_≻ : Term → F.Term
+≺_≻ = {!!}
+```
+
+
+There are 6 operations on trivial rows:
+```agda
+open F.Term
+prjL : ∀ {j k} → Row j → Row k → F.Term
+prjL {j = 1}{k} ζ₁ ζ₂ = ƛ "x" ⦂ ⟦ ᵐ (Π ζ₂) ⟧ ⇒ π[ 1 ⦂ k ] ` "x"
+prjL {j}{k}     ζ₁ ζ₂ = ƛ "x" ⦂ ⟦ ᵐ (Π ζ₂) ⟧ ⇒ π[i⦂ k ] ` "x" ⟨ 1 ≤i≤ j ⟩
+
+prjR : ∀ {j k} → Row j → Row k → F.Term
+prjR {j = 1}{k} ζ₁ ζ₂ = ƛ "x" ⦂ ⟦ ᵐ (Π ζ₂) ⟧ ⇒ π[ k ⦂ k ] ` "x"
+prjR {j}{k}     ζ₁ ζ₂ = ƛ "x" ⦂ ⟦ ᵐ (Π ζ₂) ⟧ ⇒ π[i⦂ k ] ` "x" ⟨ (suc k ∸ j) ≤i≤ k ⟩
+
+injL : ∀ {j k} → Row j → Row k → F.Term
+injL {j = 1}{k} ζ₁ ζ₂ = ƛ "x" ⦂ ⟦ ᵐ (Σ ζ₁) ⟧ ⇒ ι[ 1 ⦂ k ] ` "x"
+injL {j}{k}     ζ₁ ζ₂ = ƛ "x" ⦂ ⟦ ᵐ (Σ ζ₁) ⟧ ⇒
+                        case "x" ι[i⦂ k ]⟨ 1 ≤i≤ j , map (⟦_⟧ ∘ ᵐ) ζ₁ ⟩ 
 ```
 
 Free variables in the context and environment:
@@ -163,7 +208,6 @@ QType (ψ ⇒ ρ) ᵗ[ t ≔ τ ] = {!!}
 The augmented entailment judgment P ⇒ F ∶ ψ denotes that
 F is an F⊗⊕ term giving evidence for predicate ψ
 ```agda
-open F.Term
 
 data _⇒_⦂_ : Context → F.Term → Predicate → Set where
 ```
@@ -177,14 +221,19 @@ data ⊢_≈_ : Type → Type → Set where
 Relating predicates to evidence of the predicate:
 ```agda
 Evidence : Predicate → F.Type
-Evidence (ζ₁ ⨀ ζ₂ ~ ζ₃) = ? -- ⟦ ᵐ (Π ζ₁) ⟧ → ⟦ ᵐ (Π ζ₂) ⟧ → ⟦ ᵐ (Π ζ₃) ⟧
-Evidence n = ?
+Evidence (ζ₁ ⨀ ζ₂ ~ ζ₃) = {!!} -- ⟦ ᵐ (Π ζ₁) ⟧ → ⟦ ᵐ (Π ζ₂) ⟧ → ⟦ ᵐ (Π ζ₃) ⟧
+Evidence n = {!!}
 
 ```
 
 Rose typing rules and translation to F⊗⊕
 ```agda
 data _❙_⊢_⤳_⦂_ : Context → Env → Term → F.Term → Scheme → Set where
+  con : ∀ {P Γ}
+    → (n : ℕ)
+      ----------------
+    → P ❙ Γ ⊢ con n ⤳ con n ⦂ ᵐ Nat
+
   var : ∀ {P Γ x σ}
     → MonoType σ
     → Γ ∋ x ⦂ σ
@@ -262,4 +311,22 @@ data _❙_⊢_⤳_⦂_ : Context → Env → Term → F.Term → Scheme → Set 
 
 -- ΠEd : 
 
+```
+
+Test cases:
+```agda
+ζ₁ : Row 3
+ζ₁ = ("x" ▹ Nat) ∷ "y" ▹ Nat ∷ ("z" ▹ Nat) ∷ []
+
+ζ₂ : Row 2
+ζ₂ = ("a" ▹ Nat) ∷ "b" ▹ Nat ∷ []
+
+ζ₃ : Row 5
+ζ₃ = ζ₁ ⌢ ζ₂
+
+test-prjL : F.Term
+test-prjL = prjL ζ₁ ζ₃
+
+test-prjR : F.Term
+test-prjR = prjR ζ₂ ζ₃
 ```

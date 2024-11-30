@@ -3,6 +3,7 @@ a version of System F, extended with arbitrary-width
 product and sum types.
 
 ```agda
+{-# OPTIONS --allow-unsolved-metas #-}
 module SystemF where
 
 open import Relation.Binary.PropositionalEquality
@@ -10,9 +11,12 @@ open import Relation.Binary.PropositionalEquality
 open import Data.String using (String; _≟_)
 open import Relation.Nullary.Decidable using ( Dec; yes; no; False; toWitnessFalse)
 open import Data.Nat.Base
-open import Data.Fin.Base using (Fin; zero; suc; toℕ)
-open import Data.Vec using (Vec; []; _∷_; map; lookup)
+open import Data.Nat using (_≤_; _≤?_; z≤n; s≤s)
+  renaming (_≟_ to _≟ℕ_)
+open import Data.Fin.Base using (Fin; zero; suc; toℕ; fromℕ)
+open import Data.Vec using (Vec; []; _∷_; map; lookup; iterate; zipWith)
 open import Relation.Nullary.Negation using (¬_; contradiction)
+open import Data.Bool.Base using (Bool; true; false; T; _∧_; _∨_; not)
 ```
 
 Operators:
@@ -27,6 +31,8 @@ infixl  5 _⸴_
 
 infixl  5  _⊢_type
 infix   5  ƛ_⦂_⇒_
+infix   5 π[_⦂_]_
+infix   5 ι[_⦂_]_
 infix   5  Λ_⇒_
 infix   5  `∀_•_
 
@@ -243,9 +249,37 @@ data _⨾_⊢_⦂_ where
 
 Nicer tupling syntax:
 ```agda
-pattern _﹐_ y z = y ∷ z ∷ []
-pattern _﹐_﹐_ x y z = x ∷ y ∷ z ∷ []
-pattern _﹐_﹐_﹐_ w x y z = w ∷ x ∷ y ∷ z ∷ []
+pattern _﹐_ y z          = y ∷ z ∷ []
+pattern _﹐_﹐_ x y z      = x ∷ y ∷ z ∷ []
+pattern [_﹐_﹐_﹐_] w x y z = w ∷ x ∷ y ∷ z ∷ []
+```
+
+Define `π(i:j) E` and `ι(i:j) E` as follows:
+```agda
+π[_⦂_]_ : ℕ → ℕ → Term → Term
+π[ i ⦂ 1 ] E = E
+π[ i ⦂ _ ] E = π i E
+
+ι[_⦂_]_ : ℕ → ℕ → Term → Term
+ι[ i ⦂ 1 ] E = E
+ι[ i ⦂ _ ] E = ι i E
+```
+
+Define `π(i:j) E ⟨ a ≤ i ≤ b ⟩` as follows:
+```agda
+[_⋯_] : (i : ℕ) → (j : ℕ) → Vec ℕ (suc j ∸ i)
+[ i ⋯ j ] = iterate suc i (suc j ∸ i)
+
+π[i⦂_]_⟨_≤i≤_⟩ : ℕ → Term → ℕ → ℕ → Term
+π[i⦂ k ] E ⟨ a ≤i≤ b ⟩
+  = ⟨ map (λ idx → π[ idx ⦂ k ] E) [ a ⋯ b ] ⟩
+
+case_ι[i⦂_]⟨_≤i≤_,_⟩ : Id → ℕ → (a : ℕ) → (b : ℕ) → Vec Type (suc b ∸ a) → Term
+case x ι[i⦂ k ]⟨ a ≤i≤ b , ζ ⟩ = case (` "x") ⟪ zipWith zipFunc ζ [ a ⋯ b ] ⟫
+  where
+    zipFunc : Type → ℕ → Term
+    zipFunc τ i =
+      ƛ "y" ⦂ τ ⇒ ι[ i ⦂ k ] (` "y")
 ```
 
 Examples:
@@ -278,4 +312,11 @@ caseNat = case sumNat ⟪ (idFunc ＠ Nat) ﹐ (idFunc ＠ Nat) ﹐ (idFunc ＠ 
   where
     idTy : ∀ {Γ} → ∅ ⨾ Γ ⊢ idFunc ⦂ `∀ "a" • (` "a" ⇒ ` "a")
     idTy = ∀I (⇒I (Δ-var Z) (var Z)) (λ ())
+
+_ : Term
+_ = ⟨ (π 2 (` "x")) ﹐ (π 3 (` "x")) ﹐ π 4 (` "x") ⟩
+
+_ : π[i⦂ 5 ] (` "x") ⟨ 1 ≤i≤ 4 ⟩ ≡
+   ⟨ [ π 1 (` "x") ﹐ π 2 (` "x") ﹐ π 3 (` "x") ﹐ π 4 (` "x") ] ⟩
+_ = refl
 ```
