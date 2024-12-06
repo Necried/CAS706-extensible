@@ -55,8 +55,9 @@ data Type : Set where
   _⇒_     : Type → Type → Type
   `∀_•_    : Id → Type → Type
   -- Can length `n` be implicit?
-  ⊗[_]⟨_⟩  : (n : ℕ) → Vec Type n → Type
-  ⊕[_]⟨_⟩  : (n : ℕ) → Vec Type n → Type
+  -- Answer: yes! Can deduce `n` from shape of the vector
+  ⊗⟨_⟩  : {n : ℕ} → Vec Type n → Type
+  ⊕⟨_⟩  : {n : ℕ} → Vec Type n → Type
 ```
 
 Terms:
@@ -134,12 +135,12 @@ data _⊢_type where
   Δ-⊗ : ∀ {Δ n} {V : Vec Type n}
     → Δ ⊢[ n ] V type
       ----------------
-    → Δ ⊢ ⊗[ n ]⟨ V ⟩ type
+    → Δ ⊢ ⊗⟨ V ⟩ type
 
   Δ-⊕ : ∀ {Δ n} {V : Vec Type n}
     → Δ ⊢[ n ] V type
       ----------------
-    → Δ ⊢ ⊕[ n ]⟨ V ⟩ type
+    → Δ ⊢ ⊕⟨ V ⟩ type
 ```
 
 Substitution on types
@@ -155,9 +156,9 @@ Nat ᵗ[ a ≔ B ]           = Nat
 (T ⇒ U) ᵗ[ a ≔ B ]      = T ᵗ[ a ≔ B ] ⇒ U ᵗ[ a ≔ B ]
 (`∀ x • ty) ᵗ[ a ≔ B ] with x ≟ a
 ... | yes  _            = `∀ x • ty
-... | no   _            = `∀ x • ty ᵗ[ a ≔ B ]
-⊗[ n ]⟨ tys ⟩ ᵗ[ a ≔ B ] = ⊗[ n ]⟨  map _ᵗ[ a ≔ B ] tys  ⟩
-⊕[ n ]⟨ tys ⟩ ᵗ[ a ≔ B ] = ⊕[ n ]⟨  map _ᵗ[ a ≔ B ] tys  ⟩
+... | no   _            = `∀ x • (ty ᵗ[ a ≔ B ])
+⊗⟨ tys ⟩ ᵗ[ a ≔ B ] = ⊗⟨  map _ᵗ[ a ≔ B ] tys  ⟩
+⊕⟨ tys ⟩ ᵗ[ a ≔ B ] = ⊕⟨  map _ᵗ[ a ≔ B ] tys  ⟩
 ```
 
 Type judgment on terms
@@ -226,10 +227,10 @@ data _⨾_⊢_⦂_ where
   ⊗I : ∀ {Δ Γ} {n : ℕ} {VecE : Vec Term n} {VecA : Vec Type n}
     → Δ ⨾ Γ ⊢[ n ] VecE ⦂ VecA
       -------------------------
-    → Δ ⨾ Γ ⊢ ⟨ VecE ⟩ ⦂ ⊗[ n ]⟨ VecA ⟩
+    → Δ ⨾ Γ ⊢ ⟨ VecE ⟩ ⦂ ⊗⟨ VecA ⟩
 
   ⊗E : ∀ {Δ Γ E n} {VecA : Vec Type n}
-    → Δ ⨾ Γ ⊢ E ⦂ ⊗[ n ]⟨ VecA ⟩
+    → Δ ⨾ Γ ⊢ E ⦂ ⊗⟨ VecA ⟩
     → (idx : Fin n)
       ----------------------------
     → Δ ⨾ Γ ⊢ π (toℕ idx) E ⦂ lookup VecA idx
@@ -238,10 +239,10 @@ data _⨾_⊢_⦂_ where
     → (idx : Fin n)
     → Δ ⨾ Γ ⊢ E ⦂ lookup VecA idx
       ------------------
-    → Δ ⨾ Γ ⊢ ι (toℕ idx) E ⦂ ⊕[ n ]⟨ VecA ⟩
+    → Δ ⨾ Γ ⊢ ι (toℕ idx) E ⦂ ⊕⟨ VecA ⟩
 
   ⊕E : ∀ {Δ Γ E n B} {VecA : Vec Type n} {VecF : Vec Term n}
-    → Δ ⨾ Γ ⊢ E ⦂ ⊕[ n ]⟨ VecA ⟩
+    → Δ ⨾ Γ ⊢ E ⦂ ⊕⟨ VecA ⟩
     → Δ ⨾ Γ ⊢[ n ] VecF ⦂ map (_⇒ B) VecA
       -------------------------------------
     → Δ ⨾ Γ ⊢ case E ⟪ VecF ⟫ ⦂ B
@@ -249,9 +250,13 @@ data _⨾_⊢_⦂_ where
 
 Nicer tupling syntax:
 ```agda
-pattern _﹐_ y z          = y ∷ z ∷ []
-pattern _﹐_﹐_ x y z      = x ∷ y ∷ z ∷ []
-pattern [_﹐_﹐_﹐_] w x y z = w ∷ x ∷ y ∷ z ∷ []
+module VecPattern where
+  pattern `[_]   z          = z ∷ []
+  pattern _﹐_ y z          = y ∷ z ∷ []
+  pattern _﹐_﹐_ x y z      = x ∷ y ∷ z ∷ []
+  pattern [_﹐_﹐_﹐_] w x y z = w ∷ x ∷ y ∷ z ∷ []
+
+open VecPattern
 ```
 
 Define `π(i:j) E` and `ι(i:j) E` as follows:
