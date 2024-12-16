@@ -232,6 +232,7 @@ _∉FV[_,_] : Id → Context → Env → Set
 y ∉FV[ P , Γ ] = ∀ {t ψ} → ¬ (Γ ∋ y ⦂ t) × ¬ (P ∋ y ꞉ ψ)
 ```
 
+
 Type substitutions into schemes
 ```agda
 infix 9 _ᵐ[_≔_]
@@ -297,6 +298,22 @@ data _⇒_⦂_ : Context → F.Term → Predicate → Set where
                ⟨ (prjL ζ₁ ζ₃)﹐ (injL ζ₁ ζ₃) ⟩ ﹐
                ⟨ (prjR ζ₂ ζ₃)﹐ (injL ζ₂ ζ₃) ⟩ ]
            ⟩ ⦂ ζ₁ ⨀ ζ₂ ~ ζ₃
+```
+
+The translations on System F terms resulting from the
+entailment judgments above:
+```agda
+_★ : F.Term → F.Term
+F ★ = π 1 F
+
+_▿ : F.Term → F.Term
+F ▿ = π 2 F
+
+_prjD : F.Term → F.Term
+F prjD = π 1 F
+
+_injD : F.Term → F.Term
+F injD = π 2 F
 ```
 
 Extension of the equivalence relation ζ₁ ~ ζ₂ on rows
@@ -416,21 +433,21 @@ data _❙_⊢_⇝_⦂_ : Context → Env → Term → F.Term → Scheme → Set 
     → P ❙ Γ ⊢ M₂ ⇝ E₂ ⦂ ᵐ (Π ζ₂)
     → P ⇒ F ⦂ ζ₁ ⨀ ζ₂ ~ ζ₃
       -------------------------
-    → P ❙ Γ ⊢ M₁ ★ M₂ ⇝ π 1 F · E₁ · E₂ ⦂ ᵐ (Π ζ₃)
+    → P ❙ Γ ⊢ M₁ ★ M₂ ⇝ F ★ · E₁ · E₂ ⦂ ᵐ (Π ζ₃)
 
   ΠEd : ∀ {P Γ M D E F}{j k : ℕ}
           {ζ₁ : Row j} {ζ₂ : Row k}
     → P ❙ Γ ⊢ M ⇝ E ⦂ ᵐ (Π ζ₂)
     → P ⇒ F ⦂ ζ₁ ⧀[ D ] ζ₂
       -------------------------
-    → P ❙ Γ ⊢ prj[ D ] M ⇝ π 1 F · E ⦂ ᵐ (Π ζ₁)
+    → P ❙ Γ ⊢ prj[ D ] M ⇝ F prjD · E ⦂ ᵐ (Π ζ₁)
 
   ΣId : ∀ {P Γ M D E F}{j k : ℕ}
           {ζ₁ : Row j} {ζ₂ : Row k}
     → P ❙ Γ ⊢ M ⇝ E ⦂ ᵐ (Σ ζ₁)
     → P ⇒ F ⦂ ζ₁ ⧀[ D ] ζ₂
       -------------------------
-    → P ❙ Γ ⊢ inj[ D ] M ⇝ π 2 F · E ⦂ ᵐ (Σ ζ₂)
+    → P ❙ Γ ⊢ inj[ D ] M ⇝ F injD · E ⦂ ᵐ (Σ ζ₂)
 
   ΣE : ∀ {P Γ M₁ M₂ E₁ E₂ F τ} {j k : ℕ}
          {ζ₁ : Row j} {ζ₂ : Row k}{ζ₃}
@@ -438,7 +455,7 @@ data _❙_⊢_⇝_⦂_ : Context → Env → Term → F.Term → Scheme → Set 
     → P ❙ Γ ⊢ M₂ ⇝ E₂ ⦂ ᵐ (Σ ζ₂ ⇒ τ)
     → P ⇒ F ⦂ ζ₁ ⨀ ζ₂ ~ ζ₃
       -------------------------
-    → P ❙ Γ ⊢ M₁ ▿ M₂ ⇝ (π 2 F ＠ ⟦ ᵐ τ ⟧) · E₁ · E₂ ⦂ ᵐ (Π ζ₃)
+    → P ❙ Γ ⊢ M₁ ▿ M₂ ⇝ (F ▿ ＠ ⟦ ᵐ τ ⟧) · E₁ · E₂ ⦂ ᵐ (Π ζ₃)
 
 ```
 
@@ -556,11 +573,19 @@ _ = ▹E $ SIM ≈-Π $ ΠEd
        (pred-concat refl))
      (pred-containL (pred-concat refl))
 
--- Concatenate two records and project the "left" argument:
+-- Concatenate two records without additional restrictions:
 test-concat-proj : Term
-test-concat-proj = ƛ "m" ⇒ ƛ "n" ⇒ (prj[ L ] (` "m" ★ ` "n")) / "x"
+test-concat-proj = ƛ "m" ⇒ ƛ "n" ⇒ ` "m" ★ ` "n"
+
+-- Unfortunately I think we need some sort of
+-- underlying unification mechanism
+-- for this to be typed
+{-
+_ : ∅ ❙ ∅ ⊢ test-concat-proj ⇝ {!!} ⦂
+       `∀ "z₁" • `∀ "z₂" • `∀ "z₃" • QType {!!}
+_ = {!!}
+-}
 
 -- type-concat-proj : Type
 -- type-concat-proj = `∀ t • `∀ z₁ • `∀ z₂ • ("x" ▹ ` "t") ⧀[ L ] ()
 ```
-

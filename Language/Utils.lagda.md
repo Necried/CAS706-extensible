@@ -32,31 +32,3 @@ open import Relation.Nullary.Decidable using
 ∸-≤-suc z≤n       = z≤n
 ∸-≤-suc (s≤s j≤k) = s≤s (∸-≤-suc j≤k)
 ```
-
-
-Computing p - q
-```agda
-minus : (p q : ℕ) (q≤p : q ≤ p) → ℕ
-minus p zero z≤n = p
-minus (suc p) (suc q) (s≤s q≤p) = minus p q q≤p
-
-minus′ : {p q : ℕ} (q≤p : q ≤ p) → ℕ
-minus′ {p} z≤n = p
-minus′     (s≤s q≤p) = minus′ q≤p
-
-```
-
-Unfortunately, it is painful to use, since we have to explicitly provide
-the proof that `n ≤ m`:
-
-```agda
-_ : minus 5 3 (s≤s (s≤s (s≤s z≤n))) ≡ 2
-_ = refl
-```
-
-But we can mine decidability:
-
-```agda
-_-_ : (m n : ℕ) {n≤m : T ⌊ n ≤? m ⌋} → ℕ
-_-_ m n {n≤m} = minus m n (toWitness n≤m)
-```

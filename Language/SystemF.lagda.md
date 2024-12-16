@@ -17,6 +17,7 @@ open import Data.Fin.Base using (Fin; zero; suc; toℕ; fromℕ)
 open import Data.Vec using (Vec; []; _∷_; map; lookup; iterate; zipWith)
 open import Relation.Nullary.Negation using (¬_; contradiction)
 open import Data.Bool.Base using (Bool; true; false; T; _∧_; _∨_; not)
+open import Function.Base using (_$_)
 ```
 
 Operators:
@@ -99,17 +100,17 @@ data _∋′_ : TyVarEnv → Id → Set where
 Type variable judgments
 ```agda
 data _⊢_type      : TyVarEnv → Type → Set
-data _⊢[_]_type  : TyVarEnv → (n : ℕ) → Vec Type n → Set
+data _⊢ˢ_type     : ∀ {n : ℕ} → TyVarEnv → Vec Type n → Set
 
-data _⊢[_]_type where
+data _⊢ˢ_type where
   Δ-[] : ∀ {Δ}
-    → Δ ⊢[ 0 ] [] type
+    → Δ ⊢ˢ [] type
 
   Δ-cons : ∀ {Δ A n} {V : Vec Type n}
     → Δ ⊢ A type
-    → Δ ⊢[ n ] V type
+    → Δ ⊢ˢ V type
       ----------------
-    → Δ ⊢[ suc n ] (A ∷ V) type
+    → Δ ⊢ˢ (A ∷ V) type
 
 data _⊢_type where
   Δ-nat : ∀ {Δ}
@@ -133,12 +134,12 @@ data _⊢_type where
     → Δ ⊢ `∀ a • A type
 
   Δ-⊗ : ∀ {Δ n} {V : Vec Type n}
-    → Δ ⊢[ n ] V type
+    → Δ ⊢ˢ V type
       ----------------
     → Δ ⊢ ⊗⟨ V ⟩ type
 
   Δ-⊕ : ∀ {Δ n} {V : Vec Type n}
-    → Δ ⊢[ n ] V type
+    → Δ ⊢ˢ V type
       ----------------
     → Δ ⊢ ⊕⟨ V ⟩ type
 ```
@@ -174,19 +175,19 @@ data _∋_⦂_ : Context → Id → Type → Set where
 ```
 
 ```agda
-data _⨾_⊢[_]_⦂_ : TyVarEnv → Context → (n : ℕ) → Vec Term n → Vec Type n → Set
+data _⨾_⊢ˢ_⦂_ : ∀ {n} → TyVarEnv → Context → Vec Term n → Vec Type n → Set
 data _⨾_⊢_⦂_ : TyVarEnv → Context → Term → Type → Set
 
-data _⨾_⊢[_]_⦂_ where
+data _⨾_⊢ˢ_⦂_ where
   Δ⨾Γ-[] : ∀ {Δ Γ}
       ----------------
-    → Δ ⨾ Γ ⊢[ 0 ] [] ⦂ []
+    → Δ ⨾ Γ ⊢ˢ [] ⦂ []
 
   Δ⨾Γ-cons : ∀ {Δ Γ n E A} {VecE : Vec Term n} {VecA : Vec Type n}
     → Δ ⨾ Γ ⊢ E ⦂ A
-    → Δ ⨾ Γ ⊢[ n ] VecE ⦂ VecA
+    → Δ ⨾ Γ ⊢ˢ VecE ⦂ VecA
       ----------------
-    → Δ ⨾ Γ ⊢[ suc n ] (E ∷ VecE) ⦂ (A ∷ VecA)
+    → Δ ⨾ Γ ⊢ˢ (E ∷ VecE) ⦂ (A ∷ VecA)
  
 
 data _⨾_⊢_⦂_ where
@@ -225,7 +226,7 @@ data _⨾_⊢_⦂_ where
     → Δ ⨾ Γ ⊢ F · E ⦂ B
 
   ⊗I : ∀ {Δ Γ} {n : ℕ} {VecE : Vec Term n} {VecA : Vec Type n}
-    → Δ ⨾ Γ ⊢[ n ] VecE ⦂ VecA
+    → Δ ⨾ Γ ⊢ˢ VecE ⦂ VecA
       -------------------------
     → Δ ⨾ Γ ⊢ ⟨ VecE ⟩ ⦂ ⊗⟨ VecA ⟩
 
@@ -243,7 +244,7 @@ data _⨾_⊢_⦂_ where
 
   ⊕E : ∀ {Δ Γ E n B} {VecA : Vec Type n} {VecF : Vec Term n}
     → Δ ⨾ Γ ⊢ E ⦂ ⊕⟨ VecA ⟩
-    → Δ ⨾ Γ ⊢[ n ] VecF ⦂ map (_⇒ B) VecA
+    → Δ ⨾ Γ ⊢ˢ VecF ⦂ map (_⇒ B) VecA
       -------------------------------------
     → Δ ⨾ Γ ⊢ case E ⟪ VecF ⟫ ⦂ B
 ```
